@@ -16,6 +16,7 @@ class Autoencoder(nn.Module):
         for h_dim in hidden_dims:
             encoder_layers.append(nn.Linear(prev_dim, h_dim))
             encoder_layers.append(nn.ReLU())
+            encoder_layers.append(nn.Dropout(0.1))   # ✅ added 10/11/25 for dropuit
             prev_dim = h_dim
         encoder_layers.append(nn.Linear(prev_dim, latent_dim))
         self.encoder = nn.Sequential(*encoder_layers)

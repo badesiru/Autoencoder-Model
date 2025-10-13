@@ -11,12 +11,13 @@ from sklearn.preprocessing import StandardScaler
 import joblib
 from tqdm import tqdm
 
-from src.model.autoencoder import Autoencoder
-import src.model.config as cfg
+from .autoencoder import Autoencoder
+from . import config as cfg
 
 def load_data(file_path):
     #loads csv
     df = pd.read_csv(file_path)
+    
     #assuming last column is label only use benign 
     if "label" in df.columns:
         df = df[df["label"] == 0] 
@@ -72,3 +73,4 @@ def train():
 
 if __name__ == "__main__":
     train()
+
