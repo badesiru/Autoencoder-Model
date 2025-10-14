@@ -26,8 +26,8 @@ data[numeric_cols] = data[numeric_cols].replace([np.inf, -np.inf], np.nan)
 #Drop rows with zero values in numeric columns
 data = data.dropna(subset=numeric_cols) 
 
-#normalize the data
-data[numeric_cols] = StandardScaler().fit_transform(data[numeric_cols])
+#normalize the data [Commented out because of scaling in training script]
+#data[numeric_cols] = StandardScaler().fit_transform(data[numeric_cols])
 
 #data correlation
 corr_matrix = data[numeric_cols].corr(method='pearson')

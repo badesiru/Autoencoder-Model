@@ -84,10 +84,8 @@ def evaluate_autoencoder():
     
     with torch.no_grad():
         X_recon= model(X_test)
-    #loss_test = torch.nn.functional.l1_loss(X_recon, X_test, reduction='none').sum(1).cpu().numpy()
-    loss_test = torch.nn.functional.mse_loss(X_recon, X_test, reduction='none').sum(1).cpu().numpy()
-    loss_test = loss_test - loss_test.min()
-    loss_test = loss_test/(loss_test.max())
+    loss_test = ((X_test - X_recon)**2).mean(dim=1).cpu().numpy()
+
 
     
     #find best thresh
@@ -99,7 +97,7 @@ def evaluate_autoencoder():
     
     
     #fine tune thresholds
-    thresholds = np.linspace(best_threshold * 0.5, best_threshold * 1.5, 200)
+    thresholds = np.linspace(best_threshold * 0.5, best_threshold *20, 400)
     precisions, recalls, f1s = [], [], []
     for t in thresholds:
         preds = (loss_test > t).astype(int)
@@ -109,9 +107,37 @@ def evaluate_autoencoder():
         precisions.append(prec)
         recalls.append(rec)
         f1s.append(f1)
+
+
+    #Choose metric to maximize
+
+    # === Option A: maximize F1 (current behavior)
     best_idx = np.argmax(f1s)
     best_threshold = thresholds[best_idx]
-    #use best threshold to classify
+    print(f"\n[F1-opt] Threshold={best_threshold:.8f}, "
+    f"P={precisions[best_idx]:.3f}, R={recalls[best_idx]:.3f}, F1={f1s[best_idx]:.3f}")
+
+    # === Option B: choose threshold that achieves desired precision target
+    target_precision = 0.95  # <-- change to your goal
+    idxs = np.where(np.array(precisions) >= target_precision)[0]
+    if len(idxs):
+        p_target_idx = idxs[0]  # first threshold that meets target precision
+        print(f"\n[P≥{target_precision}] Threshold={thresholds[p_target_idx]:.8f}, "
+            f"P={precisions[p_target_idx]:.3f}, R={recalls[p_target_idx]:.3f}, F1={f1s[p_target_idx]:.3f}")
+    else:
+        print(f"\nNo threshold reached precision {target_precision}")
+
+    # === Option C (similarly for recall target)
+    target_recall = 0.95
+    idxs = np.where(np.array(recalls) >= target_recall)[0]
+    if len(idxs):
+        r_target_idx = idxs[-1]  # last threshold before recall drops below target
+        print(f"\n[R≥{target_recall}] Threshold={thresholds[r_target_idx]:.8f}, "
+            f"P={precisions[r_target_idx]:.3f}, R={recalls[r_target_idx]:.3f}, F1={f1s[r_target_idx]:.3f}")
+        
+
+
+    #display best threshold results
     predictions = (loss_test > best_threshold).astype(np.int64)
     precision = precision_score(target, predictions )
     recall = recall_score(target, predictions)
@@ -121,71 +147,7 @@ def evaluate_autoencoder():
     print("Correct anomalies : ", (predictions*target).sum())
     print("Missed anomalies : ", ((1-predictions)*target).sum())
     print(f'Precision: {precision:.2f}, Recall: {recall:.2f}, F1: {(2*precision*recall)/(precision + recall):.2f}')
-    """
-    #convert to tensor and run
-    with torch.no_grad():
-        X_recon = model(X_test)
-        #compute per-sample reconstruction error (MSE)
-        recon_errors = torch.mean((X_test - X_recon) ** 2, dim=1).cpu().numpy()
-        
-
-    #normalize errors to [0,1] for thresholding
-    recon_errors = (recon_errors - recon_errors.min()) / (recon_errors.max() - recon_errors.min())
-
-    #threshold selection
-    threshold = 0.00005 
-    
-    #classification and comparison
-    
-    #metrics
-    preds = (recon_errors > threshold).astype(int)
-    precision = precision_score(y_true, preds)
-    recall    = recall_score(y_true, preds)
-    f1        = f1_score(y_true, preds)
-    roc_auc   = roc_auc_score(y_true, recon_errors)
-
-    #summary
-    total_anomalies = y_true.sum()
-    detected_anomalies = preds.sum()
-    correct_anomalies = (preds * y_true).sum()  # true positives
-    missed_anomalies = ((1 - preds) * y_true).sum()  # false negatives
-
-    print(f"\n=== Detection Summary ===")
-    print(f"Total anomalies     : {total_anomalies}")
-    print(f"Detected anomalies  : {detected_anomalies}")
-    print(f"Correct anomalies   : {correct_anomalies}")
-    print(f"Missed anomalies    : {missed_anomalies}")
-
-    print(f"\n=== Evaluation Results ===")
-    print(f"Precision: {precision:.3f}, Recall: {recall:.3f}, F1: {f1:.3f}, ROC-AUC: {roc_auc:.3f}")
-
-    #debugging
-    print(X_test.mean().item(), X_test.std().item())
-
-
-
-
-    # Run inference without gradient computation (faster, uses less memory)
-    with torch.no_grad():
-        # Reconstruct test samples using the trained autoencoder
-        reconstructed = model(X_test)
-        # Calculate Mean Squared Error (MSE) for each sample
-        # MSE = mean((original - reconstructed)²) per sample
-        mse = torch.mean((X_test - reconstructed) ** 2, dim=1)
-        # Calculate average MSE across all test samples
-        avg_mse = mse.mean().item()
-        # Report overall reconstruction quality
-        print(f"Average reconstruction MSE on test set: {avg_mse:.6f}")
-        # Show sample reconstruction errors for analysis
-        # First 10 samples to see the range of errors
-        print("Sample reconstruction errors:", mse[:10].cpu().numpy())
-        # Interpretation guidance
-        print("\nInterpretation:")
-        print("- Lower MSE values indicate better reconstruction (likely benign traffic)")
-        print("- Higher MSE values indicate poor reconstruction (likely attack traffic)")
-        print("- Use these errors to set detection thresholds for anomaly classification")
-"""
-    
+  
 
 
 if __name__ == "__main__":
