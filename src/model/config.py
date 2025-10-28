@@ -15,17 +15,20 @@ TRAIN_FILE = os.path.join(DATA_DIR, "train.csv")
 TEST_FILE = os.path.join(DATA_DIR, "test.csv")
 
 #this is temp we can change later based on our dataset
-INPUT_DIM = 63 # number of features           
-LATENT_DIM = 4         
-HIDDEN_DIMS = [32, 16]  
+INPUT_DIM = 76 # number of features           
+LATENT_DIM = 8
+HIDDEN_DIMS = [48,24]
 
 #training settings
-BATCH_SIZE = 256
-LEARNING_RATE = 5e-4
-EPOCHS = 30
+#best for mon, wednesday: 1024, 1e-04, 5
+#best for all: 1024, 1e-04, 2, 1124,
+BATCH_SIZE = 1024
+LEARNING_RATE = 1e-04 
+EPOCHS = 2 #15-20
 VALIDATION_SPLIT = 0.2
-SEED = 42
-
+SEED = 1124 ##best seed for entire set is 1124
+DROPOUT_P = 0.1
+NOISE_STD = 0.01
 #devide setuo
 if torch.cuda.is_available():
     DEVICE = torch.device("cuda")
