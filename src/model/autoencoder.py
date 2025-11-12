@@ -4,6 +4,7 @@
 
 import torch
 import torch.nn as nn
+import src.model.config as cfg
 
 class Autoencoder(nn.Module):
     def __init__(self, input_dim: int, latent_dim: int, hidden_dims: list[int]):
@@ -21,6 +22,7 @@ class Autoencoder(nn.Module):
         for h_dim in hidden_dims: 
             encoder_layers.append(nn.Linear(prev_dim, h_dim))
             encoder_layers.append(nn.ReLU())
+            encoder_layers.append(nn.Dropout(cfg.DROPOUT_P))
             prev_dim = h_dim
         encoder_layers.append(nn.Linear(prev_dim, latent_dim)) #end at the latent dim
         self.encoder = nn.Sequential(*encoder_layers)
@@ -39,6 +41,7 @@ class Autoencoder(nn.Module):
 
     def forward(self, x):
         latent = self.encoder(x)
+        self.latent = torch.sigmoid(latent) # save latent space
         reconstructed = self.decoder(latent)
         return reconstructed
 
