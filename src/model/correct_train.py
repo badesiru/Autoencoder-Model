@@ -14,17 +14,21 @@ from tqdm import tqdm
 from .autoencoder import Autoencoder
 from . import config as cfg
 
+def kl_divergence(p,p_hat):
+    ##return divergence from target sparsity and average activation
+    return torch.sum(
+        p * torch.log(p / (p_hat + 1e-10)) +
+        (1 - p) * torch.log((1 - p) / (1 - p_hat + 1e-10))
+    )
 def load_data(file_path):
     #loads csv
     df = pd.read_csv(file_path)
-    
+    print(df.head(1))
+    print(df.dtypes)
     #assuming last column is label only use benign 
-    if "label" in df.columns:
-        df = df[df["label"] == 0] 
-        df = df.drop(columns=["label"])
 
     #create scaler,  Options: StandardScaler, MinMaxScaler,  MaxAbsScaler
-    scaler = MinMaxScaler() 
+    scaler = MinMaxScaler()
     X = scaler.fit_transform(df.values)
     X_tensor = torch.tensor(X, dtype=torch.float32)
 
@@ -55,16 +59,25 @@ def train():
         epoch_loss = 0
         # y_batch is target, target is same as train input for autoencoder
         for x_batch, y_batch in tqdm(dataloader, desc=f"Epoch {epoch+1}/{cfg.EPOCHS}"):
-            x_batch, y_batch = x_batch.to(cfg.DEVICE), y_batch.to(cfg.DEVICE)
-            optimizer.zero_grad()
-            reconstructed = model(x_batch)
-            loss = criterion(reconstructed, y_batch)
-            loss.backward()
-            optimizer.step()
-            epoch_loss += loss.item()
+            x_batch = x_batch.to(cfg.DEVICE)
+            
+            # === Add Gaussian noise to input ===
+            noisy_input = x_batch + torch.randn_like(x_batch) * cfg.NOISE_STD
 
+            optimizer.zero_grad()
+            reconstructed = model(noisy_input)
+            recon_loss = criterion(reconstructed, x_batch)  # target is clean
+
+             # === Sparsity Regularization ===
+            p_hat = torch.mean(model.latent, dim=0)  # average activation per latent neuron
+            sparsity_loss = kl_divergence(torch.full_like(p_hat, cfg.SPARSITY_TARGET), p_hat)
+            total_loss = recon_loss + cfg.SPARSITY_WEIGHT * sparsity_loss
+            total_loss.backward()
+            optimizer.step()
+            epoch_loss += total_loss.item()
+        avg_activation = torch.mean(model.latent).item()
         avg_loss = epoch_loss / len(dataloader)
-        print(f"Epoch [{epoch+1}/{cfg.EPOCHS}] | Loss: {avg_loss:.6f}")
+        print(f"Epoch [{epoch+1}/{cfg.EPOCHS}] | Loss: {avg_loss:.6f} | Avg latent activation: {avg_activation:.4f}")
 
     #save
     torch.save(model.state_dict(), cfg.MODEL_SAVE_PATH)

@@ -8,8 +8,10 @@ import pandas as pd
 import joblib
 from src.model.autoencoder import Autoencoder
 from sklearn.metrics import precision_score, recall_score
-import src.model.config as cfg
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
+import src.model.config as cfg
+import matplotlib.pyplot as plt
 
 def evaluate_autoencoder():
 
@@ -25,10 +27,6 @@ def evaluate_autoencoder():
     
     #create target
     target = np.load("target.npy")
-    np.savetxt("targets.csv", target, delimiter=",", fmt="%.3f")
-
-    print("Mean of features:", df.mean().mean())
-    print("Std of features:", df.std().mean())
 
     if not os.path.exists(cfg.MODEL_SAVE_PATH):
         raise FileNotFoundError(f"Model not found at {cfg.MODEL_SAVE_PATH}")
@@ -51,9 +49,21 @@ def evaluate_autoencoder():
     loss_test = torch.mean((X_scaled_test_recon - X_test) ** 2, dim=1).cpu().numpy()
     min_loss, max_loss = loss_test.min(), loss_test.max()
     step = max_loss / (min_loss*10+1e-10)
+
+    #graph losses
+    plt.hist(loss_test[target==0], bins=100, alpha=0.6, label='Benign')
+    plt.hist(loss_test[target==1], bins=100, alpha=0.6, label='Attack')
+    plt.legend(); plt.yscale('log'); plt.xlabel("Reconstruction Error"); plt.show()
+
     thresh = min_loss
+    best_f1 = 0.0
+    best_precision = 0.0
+    best_recall = 0.0
+    best_fpr = 0.0
+    best_fnr = 0.0
+    best_predictions = None
     while thresh <= max_loss/0.9:
-        thresh*=1.1
+        thresh*=1.05
         # select a threshold for predictions
         predictions = (loss_test > thresh).astype(np.int64)
         if predictions.sum() == 0:
@@ -79,9 +89,28 @@ def evaluate_autoencoder():
             FPR = FP / (FP + TN + 1e-10)
             FNR = FN / (FN + TP + 1e-10)
 
+            #save best f1
+            if f1 > best_f1:
+                best_f1 = f1
+                best_precision = precision
+                best_recall = recall    
+                best_fpr = FPR
+                best_fnr = FNR
+                best_predictions = predictions.copy()
             # Print all results
             print(f"Precision: {precision:.2f}, Recall: {recall:.2f}, F1: {f1:.2f}")
             print(f"FPR: {FPR:.3f}, FNR: {FNR:.3f}, FN: {FN}, FP: {FP}, TP: {TP}, TN: {TN}")
 
+    #print classification report on best f1
+    print("\nBest Threshold Evaluation:")
+    print(f"Precision: {best_precision:.2f}, Recall: {best_recall:.2f}, F1: {best_f1:.2f}")
+    print(f"FPR: {best_fpr:.3f}, FNR: {best_fnr:.3f}")
+
+    # --- Confusion Matrix ---
+    conf_matrix = confusion_matrix(target, best_predictions)
+    disp = ConfusionMatrixDisplay(conf_matrix, display_labels=["Benign", "Attack"])
+    disp.plot(cmap="Blues", values_format='d')
+    plt.title("Confusion Matrix — Best Threshold")
+    plt.show()
 if __name__ == "__main__":
     evaluate_autoencoder()
